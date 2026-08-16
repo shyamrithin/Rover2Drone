@@ -24,3 +24,12 @@ Verified working: 2026-08-15
 - Do not install NVIDIA drivers inside WSL. Windows driver only.
 - ros-humble-sdformat-urdf pulls libsdformat12/ignition-utils1. Expected,
   coexists with Harmonic's libsdformat14, not contamination.
+
+## PX4 SITL verified: 2026-08-16
+- PX4-Autopilot v1.17.0, Gazebo Sim 8.15.0 (Harmonic)
+- `make px4_sitl gz_x500`: full takeoff and land cycle, RTF ~99.9%
+- uXRCE-DDS client picked up ROS_DOMAIN_ID=42 from setup/env.sh
+- Params needed in SITL to arm without a GCS or RC link:
+    NAV_RCL_ACT 0, NAV_DLL_ACT 0, COM_RCL_EXCEPT 4
+- Known-benign noise: `NodeShared::Publish() Interrupted system call`
+  from gz-transport, and vehicle_imu timestamp errors on sim hitches.

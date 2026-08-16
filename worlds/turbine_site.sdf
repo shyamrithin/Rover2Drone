@@ -4,11 +4,11 @@
   Demonstration world for the Rover2Drone marsupial inspection stack.
 
   Contains a parked wind turbine (generated tower and blade meshes, see
-  tools/gen_turbine_meshes.py) and a four-wheel skid-steer ground rover.
-  The aerial vehicle is NOT defined here: PX4 SITL attaches to this world
-  in standalone mode and spawns the x500 itself.
+  tools/gen_turbine_meshes.py) and a four-wheel skid-steer ground rover
+  with a landing deck. The aerial vehicle is NOT defined here: PX4 SITL
+  attaches to this world in standalone mode and spawns the x500 itself.
 
-  Scale: hub height 12.5 m, blade length 6 m. Roughly half a small
+  Scale: hub height ~13 m, blade length 6 m. Roughly half a small
   commercial machine, far under utility scale (80-120 m hub, 40-60 m
   blades). Chosen for demonstration legibility. Replace with correctly
   scaled geometry before claiming any quantitative result.
@@ -17,8 +17,16 @@
   blade collision is a single coarse box per blade, deliberately cheap.
   The turbine is static, so no inertia is specified for it.
 
+  The rover deck has both visual and collision geometry, with high
+  friction, so the drone can take off from and land on it. Deck surface
+  is at model z = 0.225, world z ~= 0.445 with the model pose below.
+
   Rover suspension arms are visual only. True rocker-bogie articulation
   is deferred: it needs six wheels and a rocker differential.
+
+  Sensor system plugins (Imu, Magnetometer, AirPressure, NavSat) and the
+  spherical_coordinates block are required by PX4; without them the
+  autopilot reports missing barometer/compass/gyro and refuses to arm.
 
   Topics published:  /rover/odometry  (gz.msgs.Odometry)
   Topics subscribed: /rover/cmd_vel   (gz.msgs.Twist)
@@ -41,6 +49,12 @@
             name="gz::sim::systems::Contact"/>
     <plugin filename="gz-sim-imu-system"
             name="gz::sim::systems::Imu"/>
+    <plugin filename="gz-sim-magnetometer-system"
+            name="gz::sim::systems::Magnetometer"/>
+    <plugin filename="gz-sim-air-pressure-system"
+            name="gz::sim::systems::AirPressure"/>
+    <plugin filename="gz-sim-navsat-system"
+            name="gz::sim::systems::NavSat"/>
     <plugin filename="gz-sim-sensors-system"
             name="gz::sim::systems::Sensors">
       <render_engine>ogre2</render_engine>
@@ -51,6 +65,14 @@
       <background>0.72 0.82 0.92 1</background>
       <sky/>
     </scene>
+
+    <spherical_coordinates>
+      <surface_model>EARTH_WGS84</surface_model>
+      <world_frame_orientation>ENU</world_frame_orientation>
+      <latitude_deg>12.8231</latitude_deg>
+      <longitude_deg>80.0452</longitude_deg>
+      <elevation>15</elevation>
+    </spherical_coordinates>
 
     <light type="directional" name="sun">
       <cast_shadows>true</cast_shadows>
@@ -215,12 +237,12 @@
         </visual>
         <visual name="deck">
           <pose>0.05 0 0.21 0 0 0</pose>
-          <geometry><box><size>0.5 0.5 0.03</size></box></geometry>
+          <geometry><box><size>0.6 0.6 0.03</size></box></geometry>
           <material><ambient>0.12 0.12 0.13 1</ambient><diffuse>0.20 0.20 0.22 1</diffuse></material>
         </visual>
         <visual name="deck_marker">
-          <pose>0.05 0 0.229 0 0 0</pose>
-          <geometry><box><size>0.28 0.28 0.004</size></box></geometry>
+          <pose>0.05 0 0.226 0 0 0</pose>
+          <geometry><box><size>0.34 0.34 0.004</size></box></geometry>
           <material><ambient>0.9 0.9 0.9 1</ambient><diffuse>0.98 0.98 0.98 1</diffuse></material>
         </visual>
         <visual name="mast">
@@ -248,8 +270,17 @@
           <geometry><box><size>0.09 0.05 0.20</size></box></geometry>
           <material><ambient>0.25 0.25 0.27 1</ambient><diffuse>0.35 0.35 0.38 1</diffuse></material>
         </visual>
-        <collision name="collision">
+        <collision name="chassis_collision">
           <geometry><box><size>0.92 0.52 0.16</size></box></geometry>
+        </collision>
+        <collision name="upper_body_collision">
+          <pose>0.05 0 0.13 0 0 0</pose>
+          <geometry><box><size>0.62 0.46 0.12</size></box></geometry>
+        </collision>
+        <collision name="deck_collision">
+          <pose>0.05 0 0.21 0 0 0</pose>
+          <geometry><box><size>0.6 0.6 0.03</size></box></geometry>
+          <surface><friction><ode><mu>1.6</mu><mu2>1.6</mu2></ode></friction></surface>
         </collision>
       </link>
 

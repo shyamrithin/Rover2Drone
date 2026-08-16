@@ -1,0 +1,26 @@
+# Colcon build artifacts
+build/
+install/
+log/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Machine-specific environment (never commit; see setup/env.local.sh.example)
+setup/env.local.sh
+
+# Editor
+.vscode/
+*.swp
+
+# Simulation output
+*.ulg
+*.bag
+rosbag2_*/
+results/
+
+# External dependencies, managed by vcstool from setup/deps.repos
+src/ros_gz/
+src/px4_msgs/

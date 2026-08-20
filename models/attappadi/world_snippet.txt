@@ -1,0 +1,25 @@
+Paste into your world file.
+
+1. Georeference the world so NavSat reports real coordinates:
+
+    <spherical_coordinates>
+      <surface_model>EARTH_WGS84</surface_model>
+      <world_frame_orientation>ENU</world_frame_orientation>
+      <latitude_deg>11.081320</latitude_deg>
+      <longitude_deg>76.713563</longitude_deg>
+      <elevation>852.7</elevation>
+    </spherical_coordinates>
+
+2. Include the terrain, offset so ground level at the centre is world z = 0:
+
+    <include>
+      <uri>model://attappadi</uri>
+      <pose>0 0 -229.653 0 0 0</pose>
+    </include>
+
+3. Remove any existing <model name="ground_plane"> from the world, or the
+   flat plane will intersect the terrain.
+
+Elevation at window centre: 852.7 m
+Elevation range in window:  623.1 m to 969.4 m
+Ground resolution:          5.86 m per heightmap pixel

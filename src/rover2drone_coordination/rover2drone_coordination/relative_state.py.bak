@@ -74,12 +74,6 @@ class RelativeState(Node):
         self.declare_parameter('drone_origin_x', 8.05)
         self.declare_parameter('drone_origin_y', 0.0)
         self.declare_parameter('drone_origin_z', 0.55)
-        # Gazebo's DiffDrive plugin publishes odometry in the rover's own
-        # odom frame, which starts at zero wherever the model spawned. The
-        # spawn pose must therefore be added back to recover world ENU.
-        self.declare_parameter('rover_origin_x', 8.0)
-        self.declare_parameter('rover_origin_y', 0.0)
-        self.declare_parameter('rover_origin_z', 0.22)
         self.declare_parameter('max_range_m', 60.0)
         # PX4 v1.17 versions some uORB topics on the wire with a _v1 suffix
         # (vehicle_local_position, vehicle_status, home_position), while
@@ -93,11 +87,6 @@ class RelativeState(Node):
             self.get_parameter('drone_origin_x').value,
             self.get_parameter('drone_origin_y').value,
             self.get_parameter('drone_origin_z').value,
-        )
-        self.rover_origin = (
-            self.get_parameter('rover_origin_x').value,
-            self.get_parameter('rover_origin_y').value,
-            self.get_parameter('rover_origin_z').value,
         )
         self.max_range = self.get_parameter('max_range_m').value
         rate = self.get_parameter('publish_rate_hz').value
@@ -168,9 +157,7 @@ class RelativeState(Node):
         drone_u = self.origin[2] - d.z
 
         r = self.rover_odom.pose.pose
-        rover_e = self.rover_origin[0] + r.position.x
-        rover_n = self.rover_origin[1] + r.position.y
-        rover_u = self.rover_origin[2] + r.position.z
+        rover_e, rover_n, rover_u = r.position.x, r.position.y, r.position.z
         rover_yaw = quat_to_yaw(r.orientation.x, r.orientation.y,
                                 r.orientation.z, r.orientation.w)
 
@@ -211,9 +198,7 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        # The SIGINT handler may already have shut the context down.
-        if rclpy.ok():
-            rclpy.shutdown()
+        rclpy.shutdown()
 
 
 if __name__ == '__main__':

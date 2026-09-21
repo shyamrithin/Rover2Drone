@@ -10,11 +10,12 @@ Paste into your world file.
       <elevation>852.7</elevation>
     </spherical_coordinates>
 
-2. Include the terrain, offset so ground level at the centre is world z = 0:
+2. Include the terrain at the origin. The vertical offset is already baked
+   into the heightmap's <pos>; Gazebo ignores include poses for heightmaps.
 
     <include>
       <uri>model://attappadi</uri>
-      <pose>0 0 -229.653 0 0 0</pose>
+      <pose>0 0 0 0 0 0</pose>
     </include>
 
 3. Remove any existing <model name="ground_plane"> from the world, or the

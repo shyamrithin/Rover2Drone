@@ -13,10 +13,15 @@ Gazebo's heightmap loader requires, and writes out a complete model
 directory ready to <include> in a world file.
 
 Vertical placement is handled explicitly. A Gazebo heightmap places its
-lowest elevation at the model's own origin, so the model pose is offset
-downwards by the difference between the centre elevation and the minimum
-elevation in the window. The result is that world z = 0 sits at ground
-level in the middle of the map, which is where you want vehicles to spawn.
+lowest elevation at z = 0 of its own geometry, so it is lowered by the
+difference between the centre elevation and the minimum elevation in the
+window. The result is that world z = 0 sits at ground level in the middle
+of the map, which is where you want vehicles to spawn.
+
+The offset is written into the heightmap's own <pos> element, NOT into a
+model or <include> pose. Gazebo ignores model and include poses for
+heightmap geometry: an offset placed there is silently dropped and the
+terrain renders at its unshifted height.
 
 Inputs
   --dem       GeoTIFF elevation model. Copernicus GLO-30 from
@@ -164,9 +169,10 @@ MODEL_SDF = """<?xml version="1.0" ?>
   Window:        {extent:.0f} m square, {grid}x{grid} samples ({res:.2f} m/pixel)
   Elevation:     {zmin:.1f} m to {zmax:.1f} m ({zrange:.1f} m range)
 
-  The heightmap places its lowest sample at this model's origin. The world
-  file should therefore include this model at z = {z_offset:.2f} so that
-  ground level at the window centre coincides with world z = 0.
+  The heightmap is lowered by {z_offset:.3f} m via its own <pos> element so
+  that ground level at the window centre coincides with world z = 0.
+  Gazebo ignores model and include poses for heightmaps, so the offset
+  must live here; include this model at pose 0 0 0.
 
   Collision uses the same heightmap as the visual. Heightmap collision is
   expensive: if real-time factor suffers, replace the collision block with
@@ -181,7 +187,7 @@ MODEL_SDF = """<?xml version="1.0" ?>
           <heightmap>
             <uri>model://{name}/materials/textures/heightmap.png</uri>
             <size>{extent:.1f} {extent:.1f} {zrange:.3f}</size>
-            <pos>0 0 0</pos>
+            <pos>0 0 {z_offset:.3f}</pos>
           </heightmap>
         </geometry>
       </collision>
@@ -196,7 +202,7 @@ MODEL_SDF = """<?xml version="1.0" ?>
             </texture>
             <uri>model://{name}/materials/textures/heightmap.png</uri>
             <size>{extent:.1f} {extent:.1f} {zrange:.3f}</size>
-            <pos>0 0 0</pos>
+            <pos>0 0 {z_offset:.3f}</pos>
           </heightmap>
         </geometry>
       </visual>
@@ -217,11 +223,12 @@ SNIPPET = """Paste into your world file.
       <elevation>{z_centre:.1f}</elevation>
     </spherical_coordinates>
 
-2. Include the terrain, offset so ground level at the centre is world z = 0:
+2. Include the terrain at the origin. The vertical offset is already baked
+   into the heightmap's <pos>; Gazebo ignores include poses for heightmaps.
 
     <include>
       <uri>model://{name}</uri>
-      <pose>0 0 {z_offset:.3f} 0 0 0</pose>
+      <pose>0 0 0 0 0 0</pose>
     </include>
 
 3. Remove any existing <model name="ground_plane"> from the world, or the

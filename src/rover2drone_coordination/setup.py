@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'relative_state = rover2drone_coordination.relative_state:main',
+            'latch_manager = rover2drone_coordination.latch_manager:main',
         ],
     },
 )

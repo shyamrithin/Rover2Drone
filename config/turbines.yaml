@@ -10,10 +10,10 @@ hub_height_m: 75.0
 rotor_diameter_m: 52.0
 rotor_yaw_rad: -2.79253
 turbines:
-  - {id: turbine_01, lat: 11.077179, lon: 76.715359, x: 198.866, y: -456.915, ground_z: 84.946, hub_z: 159.946}
-  - {id: turbine_02, lat: 11.075636, lon: 76.71618, x: 289.552, y: -627.081, ground_z: 108.037, hub_z: 183.037}
-  - {id: turbine_03, lat: 11.076392, lon: 76.71894, x: 590.632, y: -541.717, ground_z: 81.543, hub_z: 156.543}
-  - {id: turbine_04, lat: 11.077625, lon: 76.721266, x: 843.987, y: -403.860, ground_z: 85.004, hub_z: 160.004}
-  - {id: turbine_05, lat: 11.078885, lon: 76.720409, x: 749.545, y: -265.022, ground_z: 64.985, hub_z: 139.985}
-  - {id: turbine_06, lat: 11.080094, lon: 76.71938, x: 636.345, y: -131.934, ground_z: 34.950, hub_z: 109.950}
-  - {id: turbine_07, lat: 11.078648, lon: 76.715355, x: 197.494, y: -294.421, ground_z: 41.467, hub_z: 116.467}
+  - {id: turbine_01, lat: 11.077179, lon: 76.715359, x: 196.229, y: -458.035, ground_z: 84.943, hub_z: 159.943}
+  - {id: turbine_02, lat: 11.075636, lon: 76.71618, x: 285.932, y: -628.714, ground_z: 108.032, hub_z: 183.032}
+  - {id: turbine_03, lat: 11.076392, lon: 76.71894, x: 587.487, y: -545.085, ground_z: 81.539, hub_z: 156.539}
+  - {id: turbine_04, lat: 11.077625, lon: 76.721266, x: 841.621, y: -408.691, ground_z: 84.999, hub_z: 159.999}
+  - {id: turbine_05, lat: 11.078885, lon: 76.720409, x: 747.983, y: -269.318, ground_z: 64.978, hub_z: 139.978}
+  - {id: turbine_06, lat: 11.080094, lon: 76.71938, x: 635.553, y: -135.586, ground_z: 34.951, hub_z: 109.951}
+  - {id: turbine_07, lat: 11.078648, lon: 76.715355, x: 195.791, y: -295.541, ground_z: 41.463, hub_z: 116.463}

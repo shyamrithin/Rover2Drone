@@ -7,10 +7,22 @@ Builds a georeferenced Gazebo Harmonic terrain model from a real-world DEM
 and an optional satellite image, both supplied as GeoTIFFs.
 
 The script clips a square, metric window centred on a given latitude and
-longitude, reprojects it into the local UTM zone so that one pixel is one
-consistent ground distance in both axes, resamples to a (2^n)+1 grid as
-Gazebo's heightmap loader requires, and writes out a complete model
-directory ready to <include> in a world file.
+longitude, reprojects it into a transverse Mercator projection centred on
+the site itself, resamples to a (2^n)+1 grid as Gazebo's heightmap loader
+requires, and writes out a complete model directory ready to <include> in a
+world file.
+
+Why a site-centred projection rather than UTM
+---------------------------------------------
+Gazebo's NavSat sensor, and therefore PX4's GPS and EKF, work in a local
+east-north-up frame aligned with TRUE north at the world origin. UTM grid
+north is rotated from true north by the grid convergence angle, which grows
+with distance from the zone's central meridian. At Attappadi (1.7 deg east
+of UTM zone 43's meridian) it is 0.33 deg, enough to put simulated GPS
+positions up to 5 m out at turbines 1 km from the origin. A transverse
+Mercator with its central meridian and origin at the site centre has zero
+convergence and unit scale there, and matches Gazebo's local frame to
+millimetres over a few kilometres. The window centre maps to (0, 0).
 
 Vertical placement is handled explicitly. A Gazebo heightmap places its
 lowest elevation at z = 0 of its own geometry, so it is lowered by the
@@ -64,10 +76,15 @@ from rasterio.transform import from_origin
 from PIL import Image
 
 
-def utm_epsg(lat, lon):
-    """EPSG code of the UTM zone containing this coordinate."""
-    zone = int(math.floor((lon + 180.0) / 6.0)) + 1
-    return (32600 if lat >= 0 else 32700) + zone
+def site_crs(lat, lon):
+    """
+    Transverse Mercator centred on (lat, lon): true north, unit scale and
+    zero grid convergence at the site, so it agrees with Gazebo's local ENU
+    frame. See the module docstring for why this replaces UTM.
+    """
+    return CRS.from_proj4(
+        f"+proj=tmerc +lat_0={lat:.9f} +lon_0={lon:.9f} +k=1 "
+        f"+x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs")
 
 
 def is_valid_grid(n):
@@ -76,28 +93,27 @@ def is_valid_grid(n):
     return m > 0 and (m & (m - 1)) == 0
 
 
-def latlon_to_utm(lat, lon, epsg):
-    """Project a single WGS84 point into the given UTM CRS."""
+def latlon_to_local(lat, lon, crs):
+    """Project a single WGS84 point into the site CRS (metres, ENU)."""
     from rasterio.warp import transform as warp_transform
-    xs, ys = warp_transform(CRS.from_epsg(4326), CRS.from_epsg(epsg),
-                            [lon], [lat])
+    xs, ys = warp_transform(CRS.from_epsg(4326), crs, [lon], [lat])
     return xs[0], ys[0]
 
 
-def extract_window(src_path, lat, lon, extent_m, grid, epsg, resampling,
+def extract_window(src_path, lat, lon, extent_m, grid, crs, resampling,
                    band_count=None):
     """
-    Reproject and clip a source raster into a square UTM window.
+    Reproject and clip a source raster into a square window in the site CRS.
 
     Returns an array shaped (bands, grid, grid).
     """
-    cx, cy = latlon_to_utm(lat, lon, epsg)
+    cx, cy = latlon_to_local(lat, lon, crs)
     half = extent_m / 2.0
     res = extent_m / (grid - 1)
 
     # Origin is the top-left corner of the window.
     dst_transform = from_origin(cx - half, cy + half, res, res)
-    dst_crs = CRS.from_epsg(epsg)
+    dst_crs = crs
 
     with rasterio.open(src_path) as src:
         n_bands = band_count or src.count
@@ -259,13 +275,13 @@ def main():
         sys.exit(f"--grid must be (2^n)+1, e.g. 129, 257, 513, 1025. "
                  f"Got {args.grid}.")
 
-    epsg = utm_epsg(args.lat, args.lon)
+    crs = site_crs(args.lat, args.lon)
     res = args.extent / (args.grid - 1)
-    print(f"UTM zone EPSG:{epsg}, {res:.2f} m per pixel")
+    print(f"Site-centred transverse Mercator, {res:.2f} m per pixel")
 
     print("Reading DEM...")
     dem = extract_window(args.dem, args.lat, args.lon, args.extent,
-                         args.grid, epsg, Resampling.bilinear, band_count=1)[0]
+                         args.grid, crs, Resampling.bilinear, band_count=1)[0]
     dem = fill_voids(dem)
 
     zmin, zmax = float(dem.min()), float(dem.max())
@@ -294,7 +310,7 @@ def main():
     if args.texture:
         print("Reading texture...")
         rgb = extract_window(args.texture, args.lat, args.lon, args.extent,
-                             args.grid, epsg, Resampling.cubic, band_count=3)
+                             args.grid, crs, Resampling.cubic, band_count=3)
         rgb = np.nan_to_num(rgb, nan=0.0)
         # Percentile stretch: satellite reflectance is rarely 0-255.
         lo, hi = np.percentile(rgb, 2), np.percentile(rgb, 98)

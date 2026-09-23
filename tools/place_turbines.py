@@ -14,8 +14,9 @@ waypoint follower and the inspection planner all read.
 
 How ground height is found
 --------------------------
-Each turbine's WGS84 coordinate is projected into the same UTM zone used by
-make_terrain_model.py, then its elevation is bilinearly sampled from a DEM
+Each turbine's WGS84 coordinate is projected into the same site-centred
+transverse Mercator used by make_terrain_model.py (true north, matching
+Gazebo's GPS frame), then its elevation is bilinearly sampled from a DEM
 grid built with the identical extraction and void-filling routine (imported
 directly from make_terrain_model.py). This guarantees the turbine sits on
 the surface Gazebo actually renders, not on a subtly different resample.
@@ -77,13 +78,50 @@ from rasterio.warp import Resampling
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from make_terrain_model import (extract_window, fill_voids,  # noqa: E402
-                                latlon_to_utm, utm_epsg)
+                                latlon_to_local, site_crs)
+
+# PX4 x500 geometry, from PX4-gazebo-models x500_base/model.sdf. The model
+# lifts its base_link 0.24 m above the spawn point, and the landing skids sit
+# 0.227 m below base_link. So a drone resting on a surface has its spawn
+# origin 0.013 m below that surface and its base_link 0.227 m above it.
+X500_MODEL_Z_OFFSET = 0.24
+X500_SKID_BELOW_BASE = 0.227
+# Spawn with the skids slightly clear of the deck; latch_manager lets the
+# drone settle onto the pad before locking it.
+DRONE_SPAWN_GAP = 0.04
 
 # Native dimensions of the meshes produced by gen_turbine_meshes.py.
 MESH_TOWER_HEIGHT = 12.5
 MESH_TOWER_BASE_R = 0.95
 MESH_BLADE_LENGTH = 6.0
 MESH_BLADE_CHORD = 0.78
+
+
+def load_rover_dims(repo):
+    """
+    Rover geometry from config/rover.yaml, written by gen_rover.py.
+    Minimal key: value parser so no YAML dependency is needed. Falls back
+    to the original small rover's numbers if the file does not exist.
+    """
+    dims = {"base_height_m": 0.22, "deck_height_m": 0.225,
+            "pad_center_x_m": 0.0, "pad_center_y_m": 0.0}
+    path = os.path.join(repo, "config", "rover.yaml")
+    if not os.path.exists(path):
+        print("  config/rover.yaml not found, using legacy rover dimensions")
+        return dims
+    with open(path) as f:
+        for line in f:
+            line = line.split("#", 1)[0].strip()
+            if ":" not in line:
+                continue
+            k, v = (t.strip() for t in line.split(":", 1))
+            try:
+                dims[k] = float(v)
+            except ValueError:
+                pass
+    print(f"  rover: base {dims['base_height_m']:.3f} m, deck +"
+          f"{dims['deck_height_m']:.3f} m (from config/rover.yaml)")
+    return dims
 
 
 def read_turbines(path):
@@ -429,23 +467,23 @@ def main():
     turbines = read_turbines(os.path.join(repo, args.turbines)
                              if not os.path.isabs(args.turbines) else args.turbines)
 
-    epsg = utm_epsg(args.lat, args.lon)
+    crs = site_crs(args.lat, args.lon)
     half = args.extent / 2.0
     res = args.extent / (args.grid - 1)
 
     print("Rebuilding DEM grid (identical to make_terrain_model.py)...")
     dem = extract_window(os.path.expanduser(args.dem), args.lat, args.lon,
-                         args.extent, args.grid, epsg,
+                         args.extent, args.grid, crs,
                          Resampling.bilinear, band_count=1)[0]
     dem = fill_voids(dem)
     zmin = float(dem.min())
     z_centre = float(dem[args.grid // 2, args.grid // 2])
     z_offset = -(z_centre - zmin)
-    cx, cy = latlon_to_utm(args.lat, args.lon, epsg)
+    cx, cy = latlon_to_local(args.lat, args.lon, crs)
 
     def ground(lat, lon):
         """World (x, y, z) of the terrain surface at a WGS84 point."""
-        ux, uy = latlon_to_utm(lat, lon, epsg)
+        ux, uy = latlon_to_local(lat, lon, crs)
         e, n = ux - cx, uy - cy
         # Row 0 of the grid is the north edge (see from_origin in
         # make_terrain_model.py), so row increases southward.
@@ -482,9 +520,11 @@ def main():
     sx, sy, sz_ground = ground(slat, slon)
     if sz_ground is None:
         sys.exit("Rover spawn point is outside the terrain window.")
-    # Rover base_link sits 0.22 m above ground on flat terrain; spawn a
-    # little higher and let it settle onto the heightmap.
-    sz = sz_ground + 0.45
+    # Spawn the rover slightly above its resting height and let it settle
+    # onto the heightmap.
+    rover = load_rover_dims(repo)
+    base_h, deck_h = rover["base_height_m"], rover["deck_height_m"]
+    sz = sz_ground + base_h + 0.08
     # Point the rover at the nearest turbine.
     near = min(yaml_rows, key=lambda r: math.hypot(r[3] - sx, r[4] - sy))
     syaw = math.atan2(near[4] - sy, near[3] - sx)
@@ -532,7 +572,15 @@ def main():
                     f"hub_z: {hz:.3f}}}\n")
     print(f"Wrote {yaml_path}")
 
-    deck_z = sz_ground + 0.22 + 0.225
+    deck_z = sz_ground + base_h + deck_h
+    # Pad centre in world: rover-frame offset rotated by the rover heading.
+    px = sx + rover["pad_center_x_m"] * math.cos(syaw) \
+        - rover["pad_center_y_m"] * math.sin(syaw)
+    py = sy + rover["pad_center_x_m"] * math.sin(syaw) \
+        + rover["pad_center_y_m"] * math.cos(syaw)
+    dz = deck_z - X500_MODEL_Z_OFFSET + X500_SKID_BELOW_BASE + DRONE_SPAWN_GAP
+    # Where the drone's base_link (and so PX4's EKF origin) rests on the pad.
+    drone_rest_z = deck_z + X500_SKID_BELOW_BASE
     print(f"""
 Rover spawn:   ({sx:.2f}, {sy:.2f}), ground z {sz_ground:.2f}, heading to {near[0]}
 Nearest turbine is {math.hypot(near[3] - sx, near[4] - sy):.0f} m away.
@@ -541,14 +589,14 @@ PX4 (drone on the rover deck):
   cd ~/PX4-Autopilot
   PX4_GZ_STANDALONE=1 PX4_GZ_WORLD={args.world} \\
   PX4_SIM_MODEL=gz_x500_gimbal \\
-  PX4_GZ_MODEL_POSE="{sx + 0.05:.3f},{sy:.3f},{deck_z + 0.35:.3f},0,0,{syaw:.4f}" \\
+  PX4_GZ_MODEL_POSE="{px:.3f},{py:.3f},{dz:.3f},0,0,{syaw:.4f}" \\
   ./build/px4_sitl_default/bin/px4
 
 relative_state origins for this world:
   ros2 run rover2drone_coordination relative_state --ros-args \\
     -p use_sim_time:=true \\
-    -p rover_origin_x:={sx:.3f} -p rover_origin_y:={sy:.3f} -p rover_origin_z:={sz_ground + 0.22:.3f} \\
-    -p drone_origin_x:={sx + 0.05:.3f} -p drone_origin_y:={sy:.3f} -p drone_origin_z:={deck_z + 0.35:.3f}
+    -p rover_origin_x:={sx:.3f} -p rover_origin_y:={sy:.3f} -p rover_origin_z:={sz_ground + base_h:.3f} \\
+    -p drone_origin_x:={px:.3f} -p drone_origin_y:={py:.3f} -p drone_origin_z:={drone_rest_z:.3f}
 """)
 
 

@@ -7,8 +7,9 @@ Brings up everything for the Rover2Drone simulation EXCEPT PX4.
 
 Starts:
   1. Gazebo Harmonic with the chosen world
-  2. ros_gz_bridge for the drone camera, rover cmd_vel, rover odometry
-     and the simulation clock, with topics remapped to short stable names
+  2. ros_gz_bridge for the drone camera, rover cmd_vel, rover odometry,
+     the drone latch and the simulation clock, with topics remapped to
+     short stable names
   3. rqt_image_view on the drone camera feed (optional)
 
 World-agnostic: Gazebo embeds the world name in sensor topic paths
@@ -70,6 +71,10 @@ def launch_setup(context, *args, **kwargs):
             '/rover/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist',
             '/rover/odometry@nav_msgs/msg/Odometry[gz.msgs.Odometry',
             '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
+            # Drone latch on the rover deck (DetachableJoint).
+            '/rover/latch/attach@std_msgs/msg/Empty]gz.msgs.Empty',
+            '/rover/latch/detach@std_msgs/msg/Empty]gz.msgs.Empty',
+            '/rover/latch/state@std_msgs/msg/String[gz.msgs.StringMsg',
         ],
         remappings=[
             (f'{gz_cam}/image', '/drone/camera/image_raw'),

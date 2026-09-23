@@ -42,7 +42,7 @@
         <scene>scene</scene>
         <ambient_light>0.7 0.7 0.72</ambient_light>
         <background_color>0.75 0.84 0.93</background_color>
-        <camera_pose>50.9 -838.7 180 0 0.42 0.785</camera_pose>
+        <camera_pose>48.7 -841.6 180 0 0.42 0.785</camera_pose>
         <camera_clip><near>0.5</near><far>20000</far></camera_clip>
         <sky>true</sky>
       </plugin>
@@ -140,12 +140,12 @@
     <include>
       <uri>model://r2d_rover</uri>
       <name>rover</name>
-      <pose>0.000 0.000 0.450 0 0 -0.97995</pose>
+      <pose>0.000 0.000 0.540 0 0 -0.98570</pose>
     </include>
 
     <model name="turbine_01">
       <static>true</static>
-      <pose>198.866 -456.915 84.946 0 0 -2.79253</pose>
+      <pose>196.229 -458.035 84.943 0 0 -2.79253</pose>
 
       <link name="tower">
         <visual name="visual">
@@ -241,7 +241,7 @@
     </model>
     <model name="turbine_02">
       <static>true</static>
-      <pose>289.552 -627.081 108.037 0 0 -2.79253</pose>
+      <pose>285.932 -628.714 108.032 0 0 -2.79253</pose>
 
       <link name="tower">
         <visual name="visual">
@@ -337,7 +337,7 @@
     </model>
     <model name="turbine_03">
       <static>true</static>
-      <pose>590.632 -541.717 81.543 0 0 -2.79253</pose>
+      <pose>587.487 -545.085 81.539 0 0 -2.79253</pose>
 
       <link name="tower">
         <visual name="visual">
@@ -433,7 +433,7 @@
     </model>
     <model name="turbine_04">
       <static>true</static>
-      <pose>843.987 -403.860 85.004 0 0 -2.79253</pose>
+      <pose>841.621 -408.691 84.999 0 0 -2.79253</pose>
 
       <link name="tower">
         <visual name="visual">
@@ -529,7 +529,7 @@
     </model>
     <model name="turbine_05">
       <static>true</static>
-      <pose>749.545 -265.022 64.985 0 0 -2.79253</pose>
+      <pose>747.983 -269.318 64.978 0 0 -2.79253</pose>
 
       <link name="tower">
         <visual name="visual">
@@ -625,7 +625,7 @@
     </model>
     <model name="turbine_06">
       <static>true</static>
-      <pose>636.345 -131.934 34.950 0 0 -2.79253</pose>
+      <pose>635.553 -135.586 34.951 0 0 -2.79253</pose>
 
       <link name="tower">
         <visual name="visual">
@@ -721,7 +721,7 @@
     </model>
     <model name="turbine_07">
       <static>true</static>
-      <pose>197.494 -294.421 41.467 0 0 -2.79253</pose>
+      <pose>195.791 -295.541 41.463 0 0 -2.79253</pose>
 
       <link name="tower">
         <visual name="visual">

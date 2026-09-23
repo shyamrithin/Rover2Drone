@@ -5,15 +5,15 @@
 # ground_z is the terrain surface at the tower base; hub_z is
 # the rotor centre. Both in world metres.
 world: attappadi_windfarm
-origin: {lat: 11.0813198, lon: 76.713563, elevation_m: 852.74}
+origin: {lat: 11.0813198, lon: 76.713563, elevation_m: 852.33}
 hub_height_m: 75.0
 rotor_diameter_m: 52.0
 rotor_yaw_rad: -2.79253
 turbines:
-  - {id: turbine_01, lat: 11.077179, lon: 76.715359, x: 196.229, y: -458.035, ground_z: 84.943, hub_z: 159.943}
-  - {id: turbine_02, lat: 11.075636, lon: 76.71618, x: 285.932, y: -628.714, ground_z: 108.032, hub_z: 183.032}
-  - {id: turbine_03, lat: 11.076392, lon: 76.71894, x: 587.487, y: -545.085, ground_z: 81.539, hub_z: 156.539}
-  - {id: turbine_04, lat: 11.077625, lon: 76.721266, x: 841.621, y: -408.691, ground_z: 84.999, hub_z: 159.999}
-  - {id: turbine_05, lat: 11.078885, lon: 76.720409, x: 747.983, y: -269.318, ground_z: 64.978, hub_z: 139.978}
-  - {id: turbine_06, lat: 11.080094, lon: 76.71938, x: 635.553, y: -135.586, ground_z: 34.951, hub_z: 109.951}
-  - {id: turbine_07, lat: 11.078648, lon: 76.715355, x: 195.791, y: -295.541, ground_z: 41.463, hub_z: 116.463}
+  - {id: turbine_01, lat: 11.077179, lon: 76.715359, x: 196.256, y: -458.097, ground_z: 85.373, hub_z: 160.373}
+  - {id: turbine_02, lat: 11.075636, lon: 76.71618, x: 285.971, y: -628.798, ground_z: 108.297, hub_z: 183.297}
+  - {id: turbine_03, lat: 11.076392, lon: 76.71894, x: 587.566, y: -545.158, ground_z: 81.536, hub_z: 156.536}
+  - {id: turbine_04, lat: 11.077625, lon: 76.721266, x: 841.734, y: -408.745, ground_z: 84.548, hub_z: 159.548}
+  - {id: turbine_05, lat: 11.078885, lon: 76.720409, x: 748.083, y: -269.354, ground_z: 65.157, hub_z: 140.157}
+  - {id: turbine_06, lat: 11.080094, lon: 76.71938, x: 635.639, y: -135.604, ground_z: 34.777, hub_z: 109.777}
+  - {id: turbine_07, lat: 11.078648, lon: 76.715355, x: 195.817, y: -295.581, ground_z: 41.964, hub_z: 116.964}

@@ -1,0 +1,15 @@
+<?xml version="1.0" ?>
+<!-- rover_test.sdf: flat-ground check for the r2d_rover model. -->
+<sdf version="1.9">
+  <world name="rover_test">
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <light type="directional" name="sun"><direction>-0.5 0.3 -0.8</direction></light>
+    <model name="ground"><static>true</static><link name="l">
+      <collision name="c"><geometry><plane><normal>0 0 1</normal><size>200 200</size></plane></geometry></collision>
+      <visual name="v"><geometry><plane><normal>0 0 1</normal><size>200 200</size></plane></geometry></visual>
+    </link></model>
+    <include><uri>model://r2d_rover</uri><name>rover</name><pose>0 0 0.5 0 0 0</pose></include>
+  </world>
+</sdf>

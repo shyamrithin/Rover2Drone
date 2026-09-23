@@ -111,7 +111,7 @@ def fetch_tiles(url_tmpl, z, tx0, ty0, tx1, ty1, decode, bands, label):
     nx, ny = tx1 - tx0 + 1, ty1 - ty0 + 1
     total = nx * ny
     print(f"  {label}: {nx}x{ny} = {total} tiles at zoom {z}")
-    if total > 400:
+    if total > 1100:
         sys.exit(f"{total} tiles is too many. Reduce --extent or the zoom.")
 
     mosaic = np.zeros((bands, ny * TILE, nx * TILE), dtype=np.float32)
@@ -190,7 +190,7 @@ def main():
     ap.add_argument("--extent", type=float, default=3000.0,
                     help="Square window side in ground metres")
     ap.add_argument("--dem-zoom", type=int, default=13)
-    ap.add_argument("--img-zoom", type=int, default=17)
+    ap.add_argument("--img-zoom", type=int, default=18)
     ap.add_argument("--no-imagery", action="store_true")
     ap.add_argument("--name", required=True)
     ap.add_argument("--out", default=".")

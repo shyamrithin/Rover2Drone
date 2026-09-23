@@ -1,0 +1,20 @@
+# terrain.yaml, written by make_terrain_model.py. Read via terrain_io.py.
+name: attappadi
+centre_lat: 11.081319800
+centre_lon: 76.713563000
+centre_elevation_m: 852.3336     # EGM2008 orthometric, = world z 0
+extent_m: 3000.000
+zmin_m: 622.9874
+zmax_m: 969.6526
+zrange_m: 346.6653
+z_offset_m: -229.3462             # heightmap <pos> z
+visual_grid: 2049
+collision_grid: 1025
+texture_px: 4096
+visual_heightmap: materials/textures/heightmap_visual.png
+collision_heightmap: materials/textures/heightmap_collision.png
+texture: materials/textures/aerial.png
+dem_source: "/home/shyam/Downloads/Map data/rasters_COP30/output_hh.tif"
+texture_source: "/home/shyam/Downloads/attappadi_rgb.tif"
+projection: site-centred transverse Mercator (true north)
+crs_scale_k: 1.000134050020                  # ground metres at site elevation

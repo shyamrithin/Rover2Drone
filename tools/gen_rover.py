@@ -522,8 +522,12 @@ def build_wheel(sx, sy):
           mat="alu")
     grip = ("<surface><friction><ode><mu>1.1</mu><mu2>0.6</mu2></ode>"
             "</friction></surface>")
-    W.collide("collision", f"<cylinder><radius>{WHEEL_R}</radius>"
-              f"<length>{WHEEL_W}</length></cylinder>", (0, 0, 0), surface=grip)
+    # Sphere, not cylinder: cylinder-vs-heightmap contacts are unreliable in
+    # Gazebo's DART physics (wheels miss or are pushed out, so the rover
+    # floats with wheels spinning). A sphere of the tyre radius gives a single
+    # robust contact point and smoother skid-steer turning. Visual unchanged.
+    W.collide("collision", f"<sphere><radius>{WHEEL_R}</radius></sphere>",
+              (0, 0, 0), surface=grip)
     return W, tag
 
 

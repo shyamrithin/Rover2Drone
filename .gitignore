@@ -24,3 +24,5 @@ results/
 # External dependencies, managed by vcstool from setup/deps.repos
 src/ros_gz/
 src/px4_msgs/
+models/*_foliage/
+models/*/materials/textures/*_raw.png

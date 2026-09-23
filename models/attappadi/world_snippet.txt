@@ -7,7 +7,7 @@ Paste into your world file.
       <world_frame_orientation>ENU</world_frame_orientation>
       <latitude_deg>11.081320</latitude_deg>
       <longitude_deg>76.713563</longitude_deg>
-      <elevation>852.7</elevation>
+      <elevation>852.3</elevation>
     </spherical_coordinates>
 
 2. Include the terrain at the origin. The vertical offset is already baked
@@ -21,6 +21,6 @@ Paste into your world file.
 3. Remove any existing <model name="ground_plane"> from the world, or the
    flat plane will intersect the terrain.
 
-Elevation at window centre: 852.7 m
-Elevation range in window:  623.2 m to 969.6 m
-Ground resolution:          5.86 m per heightmap pixel
+Elevation at window centre: 852.3 m
+Elevation range in window:  623.0 m to 969.7 m
+Ground resolution:          1.46 m per heightmap pixel

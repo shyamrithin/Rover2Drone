@@ -46,12 +46,25 @@ Inputs
   --grid      Heightmap resolution. Must be (2^n)+1: 129, 257, 513, 1025.
 
 Output (under <out>/<name>/)
-  model.config
-  model.sdf
-  materials/textures/heightmap.png   16-bit grayscale
-  materials/textures/aerial.png      RGB satellite texture
-  materials/textures/normal.png      normal map derived from the heightmap
-  world_snippet.txt                  spherical_coordinates and include tags
+  model.config, model.sdf
+  terrain.yaml                               geometry metadata, read by every
+                                             other tool via terrain_io.py
+  materials/textures/heightmap_visual.png    16-bit, fine grid (rendering)
+  materials/textures/heightmap_collision.png 16-bit, coarser grid (physics)
+  materials/textures/aerial.png              satellite texture, own resolution
+  materials/textures/normal.png              normal map from the visual grid
+  world_snippet.txt
+
+Resolution is set independently for three things, because they have very
+different costs. The texture carries almost all the visible detail and is
+cheap for the GPU, so it runs at the imagery's native resolution
+(--texture-size, default 4096 px). The visual heightmap only needs to be fine
+enough that relief looks smooth rather than faceted (--visual-grid, default
+2049). Physics collision against a heightmap is expensive, so it uses a
+coarser grid (--collision-grid, default 1025). Both heightmaps are
+normalised with the same elevation range, so they agree wherever their
+samples coincide. Note the source DEM is 30 m: finer grids interpolate it
+smoothly, they do not add real elevation detail.
 
 Dependencies
   pip install rasterio numpy pillow
@@ -76,14 +89,14 @@ from rasterio.transform import from_origin
 from PIL import Image
 
 
-def site_crs(lat, lon):
+def site_crs(lat, lon, k=1.0):
     """
     Transverse Mercator centred on (lat, lon): true north, unit scale and
     zero grid convergence at the site, so it agrees with Gazebo's local ENU
     frame. See the module docstring for why this replaces UTM.
     """
     return CRS.from_proj4(
-        f"+proj=tmerc +lat_0={lat:.9f} +lon_0={lon:.9f} +k=1 "
+        f"+proj=tmerc +lat_0={lat:.9f} +lon_0={lon:.9f} +k={k:.12f} "
         f"+x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs")
 
 
@@ -101,7 +114,7 @@ def latlon_to_local(lat, lon, crs):
 
 
 def extract_window(src_path, lat, lon, extent_m, grid, crs, resampling,
-                   band_count=None):
+                   band_count=None, vertex=True):
     """
     Reproject and clip a source raster into a square window in the site CRS.
 
@@ -109,10 +122,18 @@ def extract_window(src_path, lat, lon, extent_m, grid, crs, resampling,
     """
     cx, cy = latlon_to_local(lat, lon, crs)
     half = extent_m / 2.0
-    res = extent_m / (grid - 1)
-
-    # Origin is the top-left corner of the window.
-    dst_transform = from_origin(cx - half, cy + half, res, res)
+    if vertex:
+        # Heightmaps: Gazebo places vertex i at -half + i*res, edges included.
+        # Rasterio samples pixel CENTRES, so shift the grid origin by half a
+        # pixel to make those centres land exactly on the vertices. Without
+        # this the terrain renders half a pixel north-west of true position.
+        res = extent_m / (grid - 1)
+        dst_transform = from_origin(cx - half - res / 2, cy + half + res / 2,
+                                    res, res)
+    else:
+        # Textures: pixels are areas spanning the window edge to edge.
+        res = extent_m / grid
+        dst_transform = from_origin(cx - half, cy + half, res, res)
     dst_crs = crs
 
     with rasterio.open(src_path) as src:
@@ -145,7 +166,10 @@ def fill_voids(arr):
                          "Check that --lat/--lon fall inside the GeoTIFF.")
     if bad.any():
         arr = arr.copy()
-        arr[bad] = np.nanmean(arr[~bad])
+        from rasterio.fill import fillnodata
+        arr[bad] = 0.0
+        arr = fillnodata(arr.astype("float32"), mask=(~bad).astype("uint8"),
+                         max_search_distance=600, smoothing_iterations=0)
         print(f"  filled {int(bad.sum())} void pixels")
     return arr
 
@@ -201,9 +225,9 @@ MODEL_SDF = """<?xml version="1.0" ?>
       <collision name="collision">
         <geometry>
           <heightmap>
-            <uri>model://{name}/materials/textures/heightmap.png</uri>
-            <size>{extent:.1f} {extent:.1f} {zrange:.3f}</size>
-            <pos>0 0 {z_offset:.3f}</pos>
+            <uri>model://{name}/materials/textures/heightmap_collision.png</uri>
+            <size>{extent:.1f} {extent:.1f} {zrange:.4f}</size>
+            <pos>0 0 {z_offset:.4f}</pos>
           </heightmap>
         </geometry>
       </collision>
@@ -216,9 +240,9 @@ MODEL_SDF = """<?xml version="1.0" ?>
               <normal>model://{name}/materials/textures/normal.png</normal>
               <size>{extent:.1f}</size>
             </texture>
-            <uri>model://{name}/materials/textures/heightmap.png</uri>
-            <size>{extent:.1f} {extent:.1f} {zrange:.3f}</size>
-            <pos>0 0 {z_offset:.3f}</pos>
+            <uri>model://{name}/materials/textures/heightmap_visual.png</uri>
+            <size>{extent:.1f} {extent:.1f} {zrange:.4f}</size>
+            <pos>0 0 {z_offset:.4f}</pos>
           </heightmap>
         </geometry>
       </visual>
@@ -265,67 +289,108 @@ def main():
     ap.add_argument("--lon", type=float, required=True)
     ap.add_argument("--extent", type=float, default=1500.0,
                     help="Side of the square window, metres")
-    ap.add_argument("--grid", type=int, default=513,
-                    help="Heightmap size, must be (2^n)+1")
+    ap.add_argument("--visual-grid", type=int, default=2049,
+                    help="Rendered heightmap size, (2^n)+1")
+    ap.add_argument("--collision-grid", type=int, default=1025,
+                    help="Physics heightmap size, (2^n)+1")
+    ap.add_argument("--grid", type=int,
+                    help="Deprecated: sets --collision-grid")
+    ap.add_argument("--texture-size", type=int, default=4096,
+                    help="Satellite texture size in pixels")
     ap.add_argument("--name", required=True, help="Model directory name")
     ap.add_argument("--out", default=".", help="Parent models directory")
     args = ap.parse_args()
 
-    if not is_valid_grid(args.grid):
-        sys.exit(f"--grid must be (2^n)+1, e.g. 129, 257, 513, 1025. "
-                 f"Got {args.grid}.")
+    if args.grid:
+        args.collision_grid = args.grid
+    for g in (args.visual_grid, args.collision_grid):
+        if not is_valid_grid(g):
+            sys.exit(f"Grids must be (2^n)+1, e.g. 513, 1025, 2049. Got {g}.")
 
-    crs = site_crs(args.lat, args.lon)
-    res = args.extent / (args.grid - 1)
-    print(f"Site-centred transverse Mercator, {res:.2f} m per pixel")
+    # Scale the projection so world metres equal ground metres at the site
+    # elevation, matching Gazebo's GPS model. Needs the centre elevation
+    # first, so take it from a quick coarse pass.
+    from terrain_io import site_scale
+    probe = extract_window(args.dem, args.lat, args.lon, args.extent, 129,
+                           site_crs(args.lat, args.lon), Resampling.bilinear, 1)[0]
+    k = site_scale(args.lat, float(fill_voids(probe)[64, 64]))
+    crs = site_crs(args.lat, args.lon, k)
+    res = args.extent / (args.visual_grid - 1)
+    print(f"Site-centred transverse Mercator. Visual grid {args.visual_grid} "
+          f"({res:.2f} m), collision grid {args.collision_grid} "
+          f"({args.extent / (args.collision_grid - 1):.2f} m), texture "
+          f"{args.texture_size} px ({args.extent / args.texture_size:.2f} m)")
 
     print("Reading DEM...")
-    dem = extract_window(args.dem, args.lat, args.lon, args.extent,
-                         args.grid, crs, Resampling.bilinear, band_count=1)[0]
-    dem = fill_voids(dem)
-
-    zmin, zmax = float(dem.min()), float(dem.max())
+    dem_v = fill_voids(extract_window(args.dem, args.lat, args.lon, args.extent,
+                       args.visual_grid, crs, Resampling.bilinear, 1)[0])
+    dem_c = fill_voids(extract_window(args.dem, args.lat, args.lon, args.extent,
+                       args.collision_grid, crs, Resampling.bilinear, 1)[0])
+    # One normalisation for both grids so their surfaces coincide.
+    zmin = float(min(dem_v.min(), dem_c.min()))
+    zmax = float(max(dem_v.max(), dem_c.max()))
     zrange = max(zmax - zmin, 1.0)
-    z_centre = float(dem[args.grid // 2, args.grid // 2])
+    z_centre = float(dem_v[args.visual_grid // 2, args.visual_grid // 2])
     z_offset = -(z_centre - zmin)
     print(f"  elevation {zmin:.1f} to {zmax:.1f} m, centre {z_centre:.1f} m")
-
-    norm = (dem - zmin) / zrange
 
     root = os.path.join(os.path.expanduser(args.out), args.name)
     tex_dir = os.path.join(root, "materials", "textures")
     os.makedirs(tex_dir, exist_ok=True)
-
-    # Row 0 of a PNG is the top. Gazebo reads heightmaps with +Y north, so
-    # the array is flipped to keep north at the top of the image.
-    hm = (np.clip(norm, 0.0, 1.0) * 65535.0).astype("<u2")
-    Image.frombytes("I;16", (args.grid, args.grid), hm.tobytes()).save(
-        os.path.join(tex_dir, "heightmap.png"))
-    print(f"  wrote heightmap.png ({args.grid}x{args.grid}, 16-bit)")
-
-    Image.fromarray(normal_map(norm, res, zrange)).save(
+    # A rebuilt terrain invalidates gen_roads.py's pristine copies.
+    for f in os.listdir(tex_dir):
+        if f.endswith("_raw.png"):
+            os.remove(os.path.join(tex_dir, f))
+    for tag, grid, dem in (("visual", args.visual_grid, dem_v),
+                           ("collision", args.collision_grid, dem_c)):
+        hm = (np.clip((dem - zmin) / zrange, 0, 1) * 65535.0).astype("<u2")
+        Image.frombytes("I;16", (grid, grid), hm.tobytes()).save(
+            os.path.join(tex_dir, f"heightmap_{tag}.png"))
+        print(f"  wrote heightmap_{tag}.png ({grid}x{grid})")
+    Image.fromarray(normal_map((dem_v - zmin) / zrange, res, zrange)).save(
         os.path.join(tex_dir, "normal.png"))
-    print("  wrote normal.png")
 
+    ts = args.texture_size
     if args.texture:
         print("Reading texture...")
         rgb = extract_window(args.texture, args.lat, args.lon, args.extent,
-                             args.grid, crs, Resampling.cubic, band_count=3)
+                             ts, crs, Resampling.cubic, band_count=3,
+                             vertex=False)
         rgb = np.nan_to_num(rgb, nan=0.0)
-        # Percentile stretch: satellite reflectance is rarely 0-255.
-        lo, hi = np.percentile(rgb, 2), np.percentile(rgb, 98)
+        lo, hi = np.percentile(rgb, 1), np.percentile(rgb, 99.5)
         rgb = np.clip((rgb - lo) / max(hi - lo, 1e-6), 0, 1)
-        img = (np.transpose(rgb, (1, 2, 0)) * 255).astype(np.uint8)
-        Image.fromarray(img).save(os.path.join(tex_dir, "aerial.png"))
-        print("  wrote aerial.png")
+        Image.fromarray((np.transpose(rgb, (1, 2, 0)) * 255).astype(np.uint8)
+                        ).save(os.path.join(tex_dir, "aerial.png"))
+        print(f"  wrote aerial.png ({ts}x{ts})")
     else:
-        flat = np.zeros((args.grid, args.grid, 3), dtype=np.uint8)
-        flat[:, :] = (110, 125, 85)
+        flat = np.full((512, 512, 3), (110, 125, 85), dtype=np.uint8)
         Image.fromarray(flat).save(os.path.join(tex_dir, "aerial.png"))
-        print("  no texture given, wrote flat colour aerial.png")
 
+    with open(os.path.join(root, "terrain.yaml"), "w") as f:
+        f.write(f"""# terrain.yaml, written by make_terrain_model.py. Read via terrain_io.py.
+name: {args.name}
+centre_lat: {args.lat:.9f}
+centre_lon: {args.lon:.9f}
+centre_elevation_m: {z_centre:.4f}     # EGM2008 orthometric, = world z 0
+extent_m: {args.extent:.3f}
+zmin_m: {zmin:.4f}
+zmax_m: {zmax:.4f}
+zrange_m: {zrange:.4f}
+z_offset_m: {z_offset:.4f}             # heightmap <pos> z
+visual_grid: {args.visual_grid}
+collision_grid: {args.collision_grid}
+texture_px: {ts}
+visual_heightmap: materials/textures/heightmap_visual.png
+collision_heightmap: materials/textures/heightmap_collision.png
+texture: materials/textures/aerial.png
+dem_source: "{os.path.abspath(args.dem)}"
+texture_source: "{os.path.abspath(args.texture) if args.texture else ''}"
+projection: site-centred transverse Mercator (true north)
+crs_scale_k: {k:.12f}                  # ground metres at site elevation
+""")
+    grid = args.visual_grid
     fields = dict(name=args.name, lat=args.lat, lon=args.lon,
-                  extent=args.extent, grid=args.grid, res=res,
+                  extent=args.extent, grid=grid, res=res,
                   zmin=zmin, zmax=zmax, zrange=zrange,
                   z_centre=z_centre, z_offset=z_offset)
 

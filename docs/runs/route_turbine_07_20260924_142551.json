@@ -1,0 +1,18 @@
+{
+ "log": "logs/route_turbine_07_20260924_142551.csv",
+ "turbine": "turbine_07",
+ "arrived": true,
+ "sim_time_s": 288.5,
+ "distance_m": 149.0,
+ "s_start_m": 821.5,
+ "s_end_m": 970.5,
+ "mean_speed_mps": 0.516,
+ "cte_mean_m": 0.036,
+ "cte_rms_m": 0.055,
+ "cte_p95_m": 0.124,
+ "cte_max_m": 0.216,
+ "pitch_p95_deg": 8.6,
+ "pitch_max_deg": 15.8,
+ "roll_p95_deg": 4.6,
+ "roll_max_deg": 12.5
+}

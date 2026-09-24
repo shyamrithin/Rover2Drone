@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<!-- Rover2Drone rover navigation: route following on the planned road routes
+     and the RViz world overlay. Created 2026-09-24. -->
+<package format="3">
+  <name>rover2drone_nav</name>
+  <version>0.1.0</version>
+  <description>Rover2Drone rover navigation: pure-pursuit route follower on planned road routes, and RViz world overlay (roads, turbines, route).</description>
+  <maintainer email="shyamrithin44@gmail.com">Shyam</maintainer>
+  <license>MIT</license>
+
+  <depend>rclpy</depend>
+  <depend>nav_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>visualization_msgs</depend>
+  <exec_depend>python3-numpy</exec_depend>
+
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

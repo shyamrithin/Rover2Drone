@@ -8,6 +8,7 @@
 #              IMU and 2D lidar sensors added
 #              v3.1: GNSS horizontal noise given in degrees (was 1.2 deg!)
 #              v3.2: also writes rover.urdf for the RViz RobotModel display
+#              v3.3: OdometryPublisher ground truth (/rover/ground_truth)
 # Depends:     python3 standard library; matplotlib only for --preview
 # =============================================================================
 """
@@ -673,8 +674,8 @@ def build_sdf():
 
   Deck surface: {DECK_TOP:.3f} m above base_link, {BASE_H + DECK_TOP:.3f} m above
   flat ground. Pad centre at base_link x = {PAD_X:+.3f}. Mass {M_BODY + 4 * M_WHEEL:.0f} kg.
-  Topics: /rover/cmd_vel (in); /rover/odometry, /rover/imu, /rover/navsat,
-  /rover/scan (out).
+  Topics: /rover/cmd_vel (in); /rover/odometry (wheel), /rover/ground_truth
+  (+ /tf world->rover/base_link), /rover/imu, /rover/navsat, /rover/scan (out).
 -->
 <sdf version="1.9">
   <model name="rover">
@@ -697,6 +698,19 @@ def build_sdf():
       </plugin>
       <plugin filename="gz-sim-joint-state-publisher-system"
               name="gz::sim::systems::JointStatePublisher"/>
+      <!-- Ground truth: exact 3D world pose (x, y, z, roll, pitch, yaw) of
+           base_link, for the route follower, evaluation and RViz. The
+           DiffDrive odometry above stays as the (2D, drifting) wheel
+           odometry for the localisation stack. -->
+      <plugin filename="gz-sim-odometry-publisher-system"
+              name="gz::sim::systems::OdometryPublisher">
+        <odom_frame>world</odom_frame>
+        <robot_base_frame>rover/base_link</robot_base_frame>
+        <odom_topic>/rover/ground_truth</odom_topic>
+        <tf_topic>/rover/ground_truth/tf</tf_topic>
+        <dimensions>3</dimensions>
+        <odom_publish_frequency>50</odom_publish_frequency>
+      </plugin>
       <!-- Drone latch. Attaches automatically when {DRONE_MODEL} appears
            (retrying silently until PX4 spawns it); latch_manager then
            re-seats it flat on the pad. -->

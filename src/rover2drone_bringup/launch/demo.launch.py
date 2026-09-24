@@ -7,8 +7,9 @@ Brings up everything for the Rover2Drone simulation EXCEPT PX4.
 
 Starts:
   1. Gazebo Harmonic with the chosen world
-  2. ros_gz_bridge for the drone camera, rover cmd_vel, rover odometry,
-     rover IMU / GNSS / 2D lidar, the drone latch and the simulation clock,
+  2. ros_gz_bridge for the drone camera, rover cmd_vel, rover wheel
+     odometry, rover ground truth (+ /tf world->rover/base_link), rover
+     IMU / GNSS / 2D lidar, the drone latch and the simulation clock,
      with topics remapped to short stable names
   3. rqt_image_view on the drone camera feed (optional)
 
@@ -70,6 +71,9 @@ def launch_setup(context, *args, **kwargs):
             f'{gz_cam}/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
             '/rover/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist',
             '/rover/odometry@nav_msgs/msg/Odometry[gz.msgs.Odometry',
+            # Ground truth 3D pose (world frame) + its TF world->rover/base_link.
+            '/rover/ground_truth@nav_msgs/msg/Odometry[gz.msgs.Odometry',
+            '/rover/ground_truth/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V',
             # Rover sensors (gen_rover.py v3).
             '/rover/imu@sensor_msgs/msg/Imu[gz.msgs.IMU',
             '/rover/navsat@sensor_msgs/msg/NavSatFix[gz.msgs.NavSat',
@@ -83,6 +87,7 @@ def launch_setup(context, *args, **kwargs):
         remappings=[
             (f'{gz_cam}/image', '/drone/camera/image_raw'),
             (f'{gz_cam}/camera_info', '/drone/camera/camera_info'),
+            ('/rover/ground_truth/tf', '/tf'),
         ],
         parameters=[{'use_sim_time': True}])
 

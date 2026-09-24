@@ -10,8 +10,8 @@
 
   Deck surface: 0.094 m above base_link, 0.294 m above
   flat ground. Pad centre at base_link x = +0.000. Mass 23 kg.
-  Topics: /rover/cmd_vel (in); /rover/odometry, /rover/imu, /rover/navsat,
-  /rover/scan (out).
+  Topics: /rover/cmd_vel (in); /rover/odometry (wheel), /rover/ground_truth
+  (+ /tf world->rover/base_link), /rover/imu, /rover/navsat, /rover/scan (out).
 -->
 <sdf version="1.9">
   <model name="rover">
@@ -234,6 +234,19 @@
       </plugin>
       <plugin filename="gz-sim-joint-state-publisher-system"
               name="gz::sim::systems::JointStatePublisher"/>
+      <!-- Ground truth: exact 3D world pose (x, y, z, roll, pitch, yaw) of
+           base_link, for the route follower, evaluation and RViz. The
+           DiffDrive odometry above stays as the (2D, drifting) wheel
+           odometry for the localisation stack. -->
+      <plugin filename="gz-sim-odometry-publisher-system"
+              name="gz::sim::systems::OdometryPublisher">
+        <odom_frame>world</odom_frame>
+        <robot_base_frame>rover/base_link</robot_base_frame>
+        <odom_topic>/rover/ground_truth</odom_topic>
+        <tf_topic>/rover/ground_truth/tf</tf_topic>
+        <dimensions>3</dimensions>
+        <odom_publish_frequency>50</odom_publish_frequency>
+      </plugin>
       <!-- Drone latch. Attaches automatically when x500_gimbal_0 appears
            (retrying silently until PX4 spawns it); latch_manager then
            re-seats it flat on the pad. -->

@@ -4,6 +4,8 @@
 # Project:     Rover2Drone - marsupial UGV-UAV wind turbine inspection
 # Author:      Shyam (with Claude)
 # Created:     2026-09-24
+# Updated:     2026-09-24  energy defaults aligned with the power budget
+#              (Crr 0.05, eta 0.475), mass and speed from rover.yaml
 # Depends:     python3, numpy, matplotlib (system); optional: terrain_io.py
 #              + the attappadi terrain model for the aerial-image backdrop
 # =============================================================================
@@ -100,11 +102,11 @@ def read_turbines_yaml(path):
     return out
 
 
-def read_rover_mass(path, default=106.0):
+def read_rover_field(path, key, default):
     try:
         with open(path) as f:
             for line in f:
-                if line.startswith("mass_kg:"):
+                if line.startswith(key + ":"):
                     return float(line.split(":")[1].split("#")[0])
     except OSError:
         pass
@@ -431,6 +433,7 @@ def plan_to_turbine(g, comp, turb, start_xy, a, p):
         "base_minus_stop_z_m": round(turb["ground_z"] - gz, 1),
         "hub_minus_stop_z_m": round(turb["hub_z"] - gz, 1),
         "planner_cost": round(cost, 1),
+        "drive_time_min_one_way": round(st["length_3d_m"] / a.speed / 60.0, 1),
     })
     wps = [{"x": round(float(x), 3), "y": round(float(y), 3), "z": round(float(z), 3),
             "yaw": round(float(w), 4), "s": round(float(si), 2),
@@ -544,9 +547,15 @@ def main():
     ap.add_argument("--payload", type=float, default=2.0, help="drone mass, kg")
     ap.add_argument("--mass", type=float, default=None,
                     help="rover mass kg (default: rover.yaml)")
-    ap.add_argument("--crr", type=float, default=0.03,
-                    help="rolling resistance coefficient (gravel ~0.02-0.05)")
-    ap.add_argument("--eta", type=float, default=0.75, help="drivetrain efficiency")
+    ap.add_argument("--crr", type=float, default=0.05,
+                    help="rolling resistance coefficient (0.03 dirt - 0.08 loose "
+                         "gravel; matches Rover2Drone_power_budget.xlsx)")
+    ap.add_argument("--eta", type=float, default=0.475,
+                    help="battery-to-wheel efficiency (motor+gearbox 0.5 x "
+                         "driver 0.95, as in the power budget)")
+    ap.add_argument("--speed", type=float, default=None,
+                    help="cruise speed m/s for drive time (default: rover.yaml "
+                         "max_speed_mps)")
     ap.add_argument("--regen", type=float, default=0.0,
                     help="regen fraction for the reported with-regen energy")
     ap.add_argument("--plot", action="store_true")
@@ -554,7 +563,9 @@ def main():
     ap.add_argument("--fig-dir", default=os.path.join(REPO, "docs/routes"))
     a = ap.parse_args()
     if a.mass is None:
-        a.mass = read_rover_mass(a.rover_yaml)
+        a.mass = read_rover_field(a.rover_yaml, "mass_kg", 23.4)
+    if a.speed is None:
+        a.speed = read_rover_field(a.rover_yaml, "max_speed_mps", 0.6)
     p = Params(a)
 
     with open(a.roads) as f:
@@ -583,6 +594,7 @@ def main():
             "params": {"cost": a.cost, "max_grade_pct": a.max_grade,
                        "stop_radius_m": a.stop_radius, "mass_kg": p.mass,
                        "crr": a.crr, "eta": a.eta, "regen": a.regen,
+                       "speed_mps": a.speed,
                        "start": a.start},
             "summary": st,
             "waypoints": wps,
@@ -599,13 +611,14 @@ def main():
     if rows:
         hdr = (f"{'turbine':<11}{'len m':>8}{'climb m':>9}{'desc m':>8}"
                f"{'max %':>7}{'Wh':>7}{'stop->base m':>14}{'base-stop dz':>14}"
-               f"{'hub-stop dz':>13}")
+               f"{'hub-stop dz':>13}{'min':>6}")
         print("\n" + hdr + "\n" + "-" * len(hdr))
         for r in rows:
             print(f"{r['turbine']:<11}{r['length_3d_m']:>8.0f}{r['climb_m']:>9.1f}"
                   f"{r['descent_m']:>8.1f}{r['grade_max_pct']:>7.1f}"
                   f"{r['energy_wh_no_regen']:>7.1f}{r['stop_to_base_2d_m']:>14.1f}"
-                  f"{r['base_minus_stop_z_m']:>+14.1f}{r['hub_minus_stop_z_m']:>+13.1f}")
+                  f"{r['base_minus_stop_z_m']:>+14.1f}{r['hub_minus_stop_z_m']:>+13.1f}"
+                  f"{r['drive_time_min_one_way']:>6.0f}")
         print(f"\nroutes -> {os.path.relpath(a.out_dir, REPO)}/"
               + (f", figures -> {os.path.relpath(a.fig_dir, REPO)}/" if a.plot else ""))
 

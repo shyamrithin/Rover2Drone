@@ -145,7 +145,7 @@
     <include>
       <uri>model://r2d_rover</uri>
       <name>rover</name>
-      <pose>0.000 0.000 0.537 0 0 -0.98570</pose>
+      <pose>0.000 0.000 0.277 0 0 -0.98570</pose>
     </include>
 
     <model name="turbine_01">

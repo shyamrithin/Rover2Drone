@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+# =============================================================================
+# File:        tools/gen_roads.py
+# Project:     Rover2Drone - marsupial UGV-UAV wind turbine inspection
+# Author:      Shyam (with Claude)
+# Updated:     2026-09-24  junction height matching (roads met with steps of
+#              up to 2.2 m because each profile was smoothed separately)
+# Depends:     numpy, Pillow, tools/terrain_io.py
+# =============================================================================
 """
 gen_roads.py
 ============
@@ -18,6 +26,8 @@ each road:
   2. Sets every heightmap vertex within the road half-width to that profile,
      level across the width, and blends a shoulder back into the natural
      terrain. Applied identically to the visual and collision heightmaps.
+  2b. Before carving, matches road heights at junctions and crossings so
+     roads meet without a step (harmonise_junctions).
   3. Tints the road strip in the satellite texture with a dirt colour.
   4. Writes config/roads.json: each road's centreline in world metres with
      road-surface z, for the rover's waypoint follower.
@@ -68,6 +78,84 @@ def smooth(z, step, sigma_m):
     k /= k.sum()
     zp = np.pad(z, 3 * s, mode="edge")
     return np.convolve(zp, k, mode="valid")
+
+
+def _priority(r):
+    return (r["width"], len(r["xy"]))
+
+def harmonise_junctions(roads, step, snap_m=6.0, blend_m=30.0, max_added_grade=0.04,
+                        log=print):
+    """
+    Make roads agree in height where they meet.
+
+    Each road's profile is smoothed on its own, so two roads meeting at a
+    junction can disagree by metres; carving then leaves a step along the
+    line where the nearest road switches. Roads are processed from the
+    highest class (width) and longest down. Each road is matched to every
+    already-processed road it touches (its endpoints near the other road,
+    the other road's endpoints near it, or an interior crossing): the height
+    difference at the contact is spread over a smoothstep ramp of at least
+    blend_m, lengthened so the added grade stays near max_added_grade.
+    Roads of the same class split the difference. Modifies roads in place.
+    """
+    order = sorted(range(len(roads)), key=lambda i: _priority(roads[i]), reverse=True)
+    XY = [np.asarray(r["xy"], dtype=float) for r in roads]
+    done, fixes = [], []
+    for i in order:
+        P = XY[i]
+        n = len(P)
+        s = np.arange(n) * step
+        contacts = []                       # (index on i, target z)
+        for j in done:
+            Q = XY[j]
+            # endpoints of i near any vertex of j (T-junctions, end-to-end)
+            for k in (0, n - 1):
+                d = np.hypot(Q[:, 0] - P[k, 0], Q[:, 1] - P[k, 1])
+                m = int(d.argmin())
+                if d[m] <= snap_m:
+                    contacts.append((k, j, m))
+            # endpoints of j near the interior of i (j ends on i)
+            for m in (0, len(Q) - 1):
+                d = np.hypot(P[:, 0] - Q[m, 0], P[:, 1] - Q[m, 1])
+                k = int(d.argmin())
+                if d[k] <= snap_m and 0 < k < n - 1:
+                    contacts.append((k, j, m))
+            # interior crossings: closest vertex pair well inside both roads
+            D = np.hypot(P[:, None, 0] - Q[None, :, 0], P[:, None, 1] - Q[None, :, 1])
+            k, m = np.unravel_index(D.argmin(), D.shape)
+            if (D[k, m] <= step * 0.75 and 2 < k < n - 3 and 2 < m < len(Q) - 3):
+                contacts.append((int(k), j, int(m)))
+        # dedupe contacts at the same place
+        uniq = {}
+        for k, j, m in contacts:
+            uniq.setdefault(k, (j, m))
+        z = np.asarray(roads[i]["z"], dtype=float).copy()
+        z0 = z.copy()
+        def ramp(zarr, sarr, k, dz):
+            L = max(blend_m, 1.5 * abs(dz) / max_added_grade)
+            u = np.clip(np.abs(sarr - sarr[k]) / L, 0, 1)
+            zarr += dz * (1 - u * u * (3 - 2 * u))
+        for k, (j, m) in uniq.items():
+            zj = roads[j]["z"]
+            dz = float(zj[m]) - z0[k]
+            if abs(dz) < 1e-3:
+                continue
+            # Same road class: meet in the middle, each road takes half the
+            # difference. Lower class: the minor road takes all of it.
+            share = 0.5 if roads[j]["width"] == roads[i]["width"] else 1.0
+            ramp(z, s, k, dz * share)
+            if share < 1.0:
+                sj = np.arange(len(zj)) * step
+                zj2 = np.asarray(zj, dtype=float).copy()
+                ramp(zj2, sj, m, -dz * (1 - share))
+                roads[j]["z"] = zj2
+            fixes.append(abs(dz))
+        roads[i]["z"] = z
+        done.append(i)
+    if fixes:
+        log(f"  junctions: {len(fixes)} height mismatches fixed, max {max(fixes):.2f} m, "
+            f"mean {np.mean(fixes):.2f} m")
+    return roads
 
 
 def carve(hm, meta, roads, shoulder):
@@ -127,6 +215,12 @@ def main():
     ap.add_argument("--smooth-m", type=float, default=30.0)
     ap.add_argument("--shoulder-m", type=float, default=4.0)
     ap.add_argument("--tint", type=float, default=0.45, help="Texture tint 0..1")
+    ap.add_argument("--snap-m", type=float, default=6.0,
+                    help="Junction detection distance between roads")
+    ap.add_argument("--blend-m", type=float, default=30.0,
+                    help="Minimum ramp length for junction height matching")
+    ap.add_argument("--no-junction-blend", action="store_true",
+                    help="Disable junction height matching (old behaviour)")
     ap.add_argument("--types", default=",".join(WIDTH),
                     help="Comma-separated OSM highway types to use")
     a = ap.parse_args()
@@ -163,6 +257,9 @@ def main():
             roads.append({"id": pr.get("@id", pr.get("id", f"road_{len(roads)}")),
                           "type": hw, "width": WIDTH.get(hw, 4.0),
                           "xy": xy, "z": z})
+
+    if roads and not a.no_junction_blend:
+        harmonise_junctions(roads, step, snap_m=a.snap_m, blend_m=a.blend_m)
 
     if not roads:
         raise SystemExit("No usable roads in the GeoJSON inside the terrain. "

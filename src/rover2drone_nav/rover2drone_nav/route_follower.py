@@ -5,6 +5,9 @@
 # Author:      Shyam (with Claude)
 # Created:     2026-09-24
 # Updated:     2026-09-24  clean shutdown on Ctrl+C (no publish on a dead context)
+#              2026-09-25  logs rover-drone slant range per step
+#              2026-09-25  step 4: ground-truth columns (true CTE, loc error),
+#              run_tag, exit_on_arrival, timeout_s
 # Depends:     rclpy, nav_msgs, geometry_msgs, std_msgs, std_srvs,
 #              visualization_msgs; pure_pursuit.py, route_io.py
 # =============================================================================
@@ -25,7 +28,15 @@ Publishes    /rover/cmd_vel        geometry_msgs/Twist
              /nav/status           std_msgs/String     JSON: state, s, remaining, cte, ...
              /nav/cross_track_error std_msgs/Float64
              /viz/lookahead        visualization_msgs/Marker (world frame)
+Also logs   /coordination/slant_range (std_msgs/Float32, from relative_state)
+             into the run CSV, so the latched drone's seating is checked per run
 Services     /nav/pause, /nav/resume  std_srvs/Trigger
+
+Evaluation: the ground truth (gt_topic) is logged beside the pose the
+follower drives on, with the TRUE cross-track error (gt vs route) and the
+localisation error (pose vs gt). With exit_on_arrival the node exits after
+ARRIVED (or after timeout_s of sim time) so batch runs can chain; run_tag
+is added to the log file name.
 
 Safety: if the pose is older than pose_timeout (sim time), the rover is
 stopped until poses resume. On arrival (or Ctrl+C) it publishes zero
@@ -39,6 +50,10 @@ Parameters (ros2 run ... --ros-args -p name:=value):
   pose_topic     default /rover/ground_truth
   rate_hz        control rate, default 20
   auto_start     start driving immediately (default true)
+  gt_topic       ground truth for evaluation (default /rover/ground_truth)
+  run_tag        label added to the log name, e.g. m8n_s1
+  exit_on_arrival  exit after ARRIVED / timeout (default false)
+  timeout_s      give up after this much sim time (0 = never)
   v_max ... goal_tol   controller tuning, see pure_pursuit.PPParams
                        (v_max defaults to 0.9 x rover.yaml max_speed_mps)
 """
@@ -51,10 +66,11 @@ import os
 import time
 
 import rclpy
+import rclpy.task
 from geometry_msgs.msg import Point, Twist
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
-from std_msgs.msg import Float64, String
+from std_msgs.msg import Float32, Float64, String
 from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker
 
@@ -83,6 +99,10 @@ class RouteFollower(Node):
         self.declare_parameter("rate_hz", 20.0)
         self.declare_parameter("pose_timeout", 0.5)
         self.declare_parameter("auto_start", True)
+        self.declare_parameter("gt_topic", "/rover/ground_truth")
+        self.declare_parameter("run_tag", "")
+        self.declare_parameter("exit_on_arrival", False)
+        self.declare_parameter("timeout_s", 0.0)   # sim s, 0 = none
         repo = self.get_parameter("repo").value
         rover = read_rover_yaml(os.path.join(repo, "config", "rover.yaml"))
         defaults = PPParams(v_max=0.9 * rover.get("max_speed_mps", 0.6))
@@ -112,17 +132,34 @@ class RouteFollower(Node):
         self.la_pub = self.create_publisher(Marker, "/viz/lookahead", 10)
         self.create_subscription(Odometry, self.get_parameter("pose_topic").value,
                                  self.on_pose, 20)
+        # Rover-drone distance from relative_state, logged alongside so each
+        # run shows whether the latched drone stayed seated (NaN if absent).
+        self.slant = None
+        self.slant_stamp = None
+        # Ground truth is always logged next to the pose the follower drives
+        # on, so runs on an estimate (EKF) report the TRUE tracking error.
+        self.gt = None
+        gt_topic = self.get_parameter("gt_topic").value
+        self.gt_same = not gt_topic or gt_topic == self.get_parameter("pose_topic").value
+        if not self.gt_same:
+            self.create_subscription(Odometry, gt_topic, self.on_gt, 20)
+        self.last_gt_xy = (float("nan"), float("nan"))
+        self.done_future = rclpy.task.Future()
+        self.create_subscription(Float32, "/coordination/slant_range", self.on_slant, 10)
         self.create_service(Trigger, "/nav/pause", self.on_pause)
         self.create_service(Trigger, "/nav/resume", self.on_resume)
 
         os.makedirs(os.path.join(repo, "logs"), exist_ok=True)
         stamp = time.strftime("%Y%m%d_%H%M%S")
-        self.log_path = os.path.join(repo, "logs", f"route_{self.route.name}_{stamp}.csv")
+        tag = self.get_parameter("run_tag").value
+        tag = f"_{tag}" if tag else ""
+        self.log_path = os.path.join(repo, "logs", f"route_{self.route.name}{tag}_{stamp}.csv")
         self.log_f = open(self.log_path, "w", newline="")
         self.log = csv.writer(self.log_f)
         self.log.writerow(["t", "x", "y", "z", "roll", "pitch", "yaw", "v_meas", "w_meas",
                            "v_cmd", "w_cmd", "state", "s", "remaining", "cte", "alpha",
-                           "grade", "kappa", "target_x", "target_y"])
+                           "grade", "kappa", "target_x", "target_y", "slant",
+                           "gt_x", "gt_y", "gt_z", "gt_yaw", "true_cte", "loc_err"])
         self.create_timer(1.0 / float(self.get_parameter("rate_hz").value), self.tick)
         self.create_timer(5.0, self.report)
         self.last_cmd = None
@@ -131,6 +168,18 @@ class RouteFollower(Node):
     def on_pose(self, msg):
         self.pose = msg
         self.pose_stamp = self.get_clock().now()
+
+    def on_gt(self, msg):
+        self.gt = msg
+
+    def on_slant(self, msg):
+        self.slant = float(msg.data)
+        self.slant_stamp = self.get_clock().now()
+
+    def slant_now(self, now):
+        if self.slant is None or (now - self.slant_stamp).nanoseconds * 1e-9 > 1.0:
+            return float("nan")
+        return self.slant
 
     def on_pause(self, req, res):
         self.running = False
@@ -181,21 +230,50 @@ class RouteFollower(Node):
         self.publish_lookahead(c, p.position.z)
 
         tw_meas = self.pose.twist.twist
+        g = self.pose if self.gt_same else self.gt
+        if g is not None:
+            gp = g.pose.pose
+            gx, gy, gz = gp.position.x, gp.position.y, gp.position.z
+            gyaw = yaw_from_quat(gp.orientation)
+            seg = self.pp.seg or 0
+            _, _, tcte, _ = self.route.project(gx, gy, max(seg - 30, 0), seg + 60)
+            lerr = math.hypot(p.position.x - gx, p.position.y - gy)
+        else:
+            gx = gy = gz = gyaw = tcte = lerr = float("nan")
         self.log.writerow([f"{t - self.t0:.3f}", f"{p.position.x:.3f}", f"{p.position.y:.3f}",
                            f"{p.position.z:.3f}", f"{roll:.4f}", f"{pitch:.4f}", f"{yaw:.4f}",
                            f"{tw_meas.linear.x:.3f}", f"{tw_meas.angular.z:.3f}",
                            f"{c.v:.3f}", f"{c.omega:.3f}", c.state, f"{c.s:.2f}",
                            f"{c.remaining:.2f}", f"{c.cte:.3f}", f"{c.alpha:.3f}",
                            f"{c.grade:.4f}", f"{c.kappa:.4f}",
-                           f"{c.target[0]:.3f}", f"{c.target[1]:.3f}"])
+                           f"{c.target[0]:.3f}", f"{c.target[1]:.3f}",
+                           f"{self.slant_now(now):.4f}",
+                           f"{gx:.3f}", f"{gy:.3f}", f"{gz:.3f}", f"{gyaw:.4f}",
+                           f"{tcte:.3f}", f"{lerr:.3f}"])
+        self.last_gt_xy = (gx, gy)
+
+        tmax = float(self.get_parameter("timeout_s").value)
+        if tmax > 0 and t - self.t0 > tmax and c.state != "arrived":
+            self.finished = True
+            self.publish_stop()
+            self.log_f.flush()
+            self.get_logger().warn(f"TIMEOUT after {tmax:.0f} s sim time; log {self.log_path}")
+            if self.get_parameter("exit_on_arrival").value:
+                self.done_future.set_result(False)
+            return
 
         if c.state == "arrived":
             self.finished = True
             self.publish_stop()
             self.log_f.flush()
+            gx_, gy_ = self.last_gt_xy
+            ex, ey = self.route.p[-1, 0], self.route.p[-1, 1]
             self.get_logger().info(
                 f"ARRIVED at {self.route.name} after {t - self.t0:.0f} s sim time; "
+                f"true distance to goal {math.hypot(gx_ - ex, gy_ - ey):.2f} m; "
                 f"log {self.log_path}")
+            if self.get_parameter("exit_on_arrival").value:
+                self.done_future.set_result(True)
 
     def publish_lookahead(self, c, z):
         m = Marker()
@@ -235,7 +313,7 @@ def main():
     rclpy.init()
     node = RouteFollower()
     try:
-        rclpy.spin(node)
+        rclpy.spin_until_future_complete(node, node.done_future)
     except KeyboardInterrupt:
         pass
     finally:

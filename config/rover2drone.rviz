@@ -217,6 +217,37 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /rover/ground_truth
       Value: true
+    - Class: rviz_default_plugins/Odometry
+      Name: EKF estimate /rover/ekf/odom
+      Enabled: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /rover/ekf/odom
+      Keep: 400
+      Position Tolerance: 0.1
+      Angle Tolerance: 0.1
+      Shape:
+        Value: Arrow
+        Color: 255; 140; 0
+        Alpha: 1
+        Shaft Length: 0.4
+        Shaft Radius: 0.03
+        Head Length: 0.12
+        Head Radius: 0.06
+      Covariance:
+        Value: true
+        Position:
+          Alpha: 0.3
+          Color: 255; 140; 0
+          Scale: 2
+          Value: true
+        Orientation:
+          Value: false
+      Value: true
     - Class: rviz_default_plugins/MarkerArray
       Name: World (roads, turbines)
       Enabled: true

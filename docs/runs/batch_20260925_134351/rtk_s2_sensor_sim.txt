@@ -1,0 +1,1 @@
+[INFO] [1790325710.461128892] [sensor_sim]: sensor_sim: profile rtk, seed 2; GNSS white 0.015 m, bias 0.01 m / 60 s, outage every ~1000000000 s; compass bias sigma 3.0 deg; 7 towers

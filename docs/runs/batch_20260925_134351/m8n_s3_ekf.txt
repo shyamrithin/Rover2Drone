@@ -1,0 +1,2 @@
+[INFO] [1790328949.216892938] [rover_ekf]: rover_ekf up: waiting for first GNSS fix + compass
+[INFO] [1790328950.051061537] [rover_ekf]: EKF initialised

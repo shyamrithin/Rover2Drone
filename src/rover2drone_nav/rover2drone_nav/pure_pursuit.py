@@ -3,6 +3,8 @@
 # Project:     Rover2Drone - marsupial UGV-UAV wind turbine inspection
 # Author:      Shyam (with Claude)
 # Created:     2026-09-24
+# Updated:     2026-09-24  align: locked turn direction (no rocking at
+#              +/-180 deg), forward creep, stuck detection + back-up recovery
 # Depends:     route_io.py (no ROS: unit-testable offline)
 # =============================================================================
 """
@@ -22,8 +24,10 @@ Algorithm, each step, given the planar pose (x, y, yaw) in the route frame:
      route point at s + Ld.
   3. Steering. alpha = bearing of the target in the rover frame; curvature
      kappa = 2 sin(alpha) / d, d = distance to the target. If |alpha|
-     exceeds rotate_threshold, turn in place first (skid steer can), until
-     it drops below rotate_exit: handles the spawn heading and big errors.
+     exceeds rotate_threshold, turn first (slow forward creep, turn
+     direction locked) until it drops below rotate_exit: handles the spawn
+     heading and big errors. If the turn makes no progress for stuck_time,
+     back up for recover_time and try again.
   4. Speed. v = min(v_max,
                     sqrt(a_lat_max / |kappa|)          bend limit,
                     v_max * grade factor               slow on steep road,
@@ -55,6 +59,11 @@ class PPParams:
     grade_speed_factor: float = 0.6
     rotate_threshold_deg: float = 60.0
     rotate_exit_deg: float = 20.0
+    align_creep_v: float = 0.06      # small forward speed while turning
+    stuck_time: float = 8.0          # s aligning without enough rotation...
+    stuck_min_rot_deg: float = 15.0  # ...counts as stuck
+    recover_v: float = -0.15         # back up at this speed...
+    recover_time: float = 2.5        # ...for this long, then realign
     goal_tol: float = 1.0
     search_window_m: float = 25.0
 
@@ -85,6 +94,11 @@ class PurePursuit:
         self.seg = None
         self.v_prev = 0.0
         self.aligning = False
+        self.align_dir = 0.0
+        self.align_t = 0.0
+        self.align_rot = 0.0
+        self.last_yaw = None
+        self.recover_left = 0.0
         self.done = False
 
     def _window(self):
@@ -119,12 +133,43 @@ class PurePursuit:
         kappa = 2.0 * math.sin(alpha) / dist
         cmd.alpha, cmd.lookahead, cmd.target, cmd.kappa = alpha, ld, (tx, ty), kappa
 
-        a_deg = abs(math.degrees(alpha))
-        self.aligning = (a_deg > p.rotate_exit_deg) if self.aligning \
-            else (a_deg > p.rotate_threshold_deg)
-        if self.aligning:
+        # Rotation actually achieved since the last step (for stuck detection).
+        dyaw = 0.0 if self.last_yaw is None else abs(
+            math.atan2(math.sin(yaw - self.last_yaw), math.cos(yaw - self.last_yaw)))
+        self.last_yaw = yaw
+
+        if self.recover_left > 0.0:
+            # Back up briefly, straight, then try aligning again.
+            self.recover_left -= dt
             self.v_prev = 0.0
-            cmd.omega = math.copysign(p.omega_align, alpha)
+            cmd.v, cmd.state = p.recover_v, "recover"
+            return cmd
+
+        a_deg = abs(math.degrees(alpha))
+        if not self.aligning and a_deg > p.rotate_threshold_deg:
+            # Enter align. Lock the turn direction for the whole manoeuvre:
+            # near +/-180 deg the sign of alpha flips with tiny motions, which
+            # made the rover rock left-right forever.
+            self.aligning = True
+            self.align_dir = math.copysign(1.0, alpha)
+            self.align_t = self.align_rot = 0.0
+        elif self.aligning and a_deg < p.rotate_exit_deg:
+            self.aligning = False
+        if self.aligning:
+            self.align_t += dt
+            self.align_rot += dyaw
+            if (self.align_t > p.stuck_time
+                    and math.degrees(self.align_rot) < p.stuck_min_rot_deg):
+                self.aligning = False
+                self.recover_left = p.recover_time
+                cmd.state = "recover"
+                cmd.v = p.recover_v
+                return cmd
+            # Turn with a slight forward creep: skid steer scrubs less on an
+            # arc than when spinning on the spot, especially on slopes.
+            self.v_prev = 0.0
+            cmd.v = p.align_creep_v
+            cmd.omega = self.align_dir * p.omega_align
             cmd.state = "align"
             return cmd
 

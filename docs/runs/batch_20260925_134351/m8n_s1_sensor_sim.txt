@@ -1,0 +1,1 @@
+[INFO] [1790327278.716416749] [sensor_sim]: sensor_sim: profile m8n, seed 1; GNSS white 0.4 m, bias 1.2 m / 180 s, outage every ~600 s; compass bias sigma 3.0 deg; 7 towers

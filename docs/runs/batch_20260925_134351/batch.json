@@ -1,0 +1,19 @@
+{
+ "turbine": "turbine_07",
+ "remaining": 400.0,
+ "configs": [
+  "gt",
+  "rtk",
+  "m8n"
+ ],
+ "seeds": [
+  1,
+  2,
+  3
+ ],
+ "sim_timeout": 2400.0,
+ "wall_timeout_min": 60.0,
+ "settle": 4.0,
+ "ekf_warmup": 4.0,
+ "summarise": null
+}

@@ -5,7 +5,7 @@
 <package format="3">
   <name>rover2drone_nav</name>
   <version>0.1.0</version>
-  <description>Rover2Drone rover navigation: pure-pursuit route follower on planned road routes, and RViz world overlay (roads, turbines, route).</description>
+  <description>Rover2Drone rover navigation: pure-pursuit route follower on planned road routes, realistic GNSS/compass simulation, planar EKF localisation, and RViz world overlay (roads, turbines, route).</description>
   <maintainer email="shyamrithin44@gmail.com">Shyam</maintainer>
   <license>MIT</license>
 
@@ -15,6 +15,7 @@
   <depend>std_msgs</depend>
   <depend>std_srvs</depend>
   <depend>visualization_msgs</depend>
+  <depend>sensor_msgs</depend>
   <exec_depend>python3-numpy</exec_depend>
 
   <test_depend>python3-pytest</test_depend>

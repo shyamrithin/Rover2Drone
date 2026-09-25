@@ -9,6 +9,7 @@
 #              v3.1: GNSS horizontal noise given in degrees (was 1.2 deg!)
 #              v3.2: also writes rover.urdf for the RViz RobotModel display
 #              v3.3: OdometryPublisher ground truth (/rover/ground_truth)
+#              v3.4: isotropic wheel friction 0.8 (sphere has no fdir1)
 # Depends:     python3 standard library; matplotlib only for --preview
 # =============================================================================
 """
@@ -632,7 +633,10 @@ def build_wheel(sx, sy):
                out * (WHEEL_W / 2 + 0.001)), (0, 0, a), mat="panel")
     W.cyl("hub_cap", 0.014, 0.012, (0, 0, out * (WHEEL_W / 2 + 0.004)),
           mat="alu")
-    grip = ("<surface><friction><ode><mu>1.1</mu><mu2>0.6</mu2></ode>"
+    # Isotropic friction: mu/mu2 differ only along fdir1, which a sphere
+    # does not define, so the old 1.1/0.6 split acted in an arbitrary
+    # direction and made skid-steer turning erratic. 0.8 ~ rubber on gravel.
+    grip = ("<surface><friction><ode><mu>0.8</mu><mu2>0.8</mu2></ode>"
             "</friction></surface>")
     # Sphere, not cylinder: cylinder-vs-heightmap contacts are unreliable in
     # Gazebo's DART physics (wheels miss or are pushed out, so the rover

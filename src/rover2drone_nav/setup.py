@@ -4,7 +4,8 @@
 # Author:      Shyam (with Claude)
 # Created:     2026-09-24
 # =============================================================================
-"""ament_python setup for rover2drone_nav (route_follower, world_overlay)."""
+"""ament_python setup for rover2drone_nav (route_follower, world_overlay,
+sensor_sim, rover_ekf)."""
 from setuptools import find_packages, setup
 
 package_name = 'rover2drone_nav'
@@ -28,6 +29,8 @@ setup(
         'console_scripts': [
             'route_follower = rover2drone_nav.route_follower:main',
             'world_overlay = rover2drone_nav.world_overlay:main',
+            'sensor_sim = rover2drone_nav.sensor_sim:main',
+            'rover_ekf = rover2drone_nav.rover_ekf:main',
         ],
     },
 )

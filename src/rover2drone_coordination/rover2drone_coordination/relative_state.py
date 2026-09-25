@@ -1,4 +1,15 @@
 #!/usr/bin/env python3
+# =============================================================================
+# File:        src/rover2drone_coordination/rover2drone_coordination/relative_state.py
+# Project:     Rover2Drone - marsupial UGV-UAV wind turbine inspection
+# Author:      Shyam (with Claude)
+# Updated:     2026-09-25  rover pose from /rover/ground_truth (world frame)
+#              by default. The old /rover/odometry path added the spawn
+#              position but never rotated by the spawn yaw, so the rover
+#              drifted away from the latched drone as soon as it drove
+#              (slant range grew ~0.9 m per m driven with the -56 deg spawn).
+# Depends:     rclpy, nav_msgs, geometry_msgs, std_msgs, px4_msgs
+# =============================================================================
 """
 relative_state.py
 =================
@@ -40,6 +51,12 @@ Published topics
 Parameters
   drone_origin_x, drone_origin_y, drone_origin_z   PX4 local origin in
       the Gazebo world frame (ENU metres). Defaults match the demo spawn.
+  rover_topic      nav_msgs/Odometry source for the rover (default
+      /rover/ground_truth, already in the world frame).
+  rover_frame      'world' (default): rover_topic is in world ENU.
+                   'odom': rover_topic is DiffDrive odometry, which starts
+      at the spawn pose with the spawn heading as its x axis; it is rotated
+      by rover_origin_yaw and offset by rover_origin_x/y/z.
   max_range_m      Range beyond which link_ok goes false.
   publish_rate_hz  Output rate.
 
@@ -80,6 +97,9 @@ class RelativeState(Node):
         self.declare_parameter('rover_origin_x', 8.0)
         self.declare_parameter('rover_origin_y', 0.0)
         self.declare_parameter('rover_origin_z', 0.22)
+        self.declare_parameter('rover_origin_yaw', 0.0)
+        self.declare_parameter('rover_topic', '/rover/ground_truth')
+        self.declare_parameter('rover_frame', 'world')
         self.declare_parameter('max_range_m', 60.0)
         # PX4 v1.17 versions some uORB topics on the wire with a _v1 suffix
         # (vehicle_local_position, vehicle_status, home_position), while
@@ -114,8 +134,11 @@ class RelativeState(Node):
         self.rover_odom = None
         self.drone_pos = None
 
+        self.rover_topic = self.get_parameter('rover_topic').value
+        self.rover_frame = self.get_parameter('rover_frame').value
+        self.rover_yaw0 = self.get_parameter('rover_origin_yaw').value
         self.create_subscription(
-            Odometry, '/rover/odometry', self._on_rover, 10)
+            Odometry, self.rover_topic, self._on_rover, 10)
         self.create_subscription(
             VehicleLocalPosition,
             self.get_parameter('drone_pos_topic').value,
@@ -136,7 +159,8 @@ class RelativeState(Node):
         self._warned = False
 
         self.get_logger().info(
-            f'relative_state up. Drone local origin assumed at '
+            f'relative_state up. Rover from {self.rover_topic} '
+            f'({self.rover_frame} frame). Drone local origin assumed at '
             f'{self.origin} ENU, max range {self.max_range} m.')
 
     def _on_rover(self, msg):
@@ -150,7 +174,7 @@ class RelativeState(Node):
             if not self._warned:
                 missing = []
                 if self.rover_odom is None:
-                    missing.append('/rover/odometry')
+                    missing.append(self.rover_topic)
                 if self.drone_pos is None:
                     missing.append(
                         self.get_parameter('drone_pos_topic').value)
@@ -168,11 +192,17 @@ class RelativeState(Node):
         drone_u = self.origin[2] - d.z
 
         r = self.rover_odom.pose.pose
-        rover_e = self.rover_origin[0] + r.position.x
-        rover_n = self.rover_origin[1] + r.position.y
-        rover_u = self.rover_origin[2] + r.position.z
         rover_yaw = quat_to_yaw(r.orientation.x, r.orientation.y,
                                 r.orientation.z, r.orientation.w)
+        if self.rover_frame == 'world':
+            rover_e, rover_n, rover_u = r.position.x, r.position.y, r.position.z
+        else:
+            # DiffDrive odom: x axis = spawn heading, origin = spawn pose.
+            c0, s0 = math.cos(self.rover_yaw0), math.sin(self.rover_yaw0)
+            rover_e = self.rover_origin[0] + c0 * r.position.x - s0 * r.position.y
+            rover_n = self.rover_origin[1] + s0 * r.position.x + c0 * r.position.y
+            rover_u = self.rover_origin[2] + r.position.z
+            rover_yaw += self.rover_yaw0
 
         # Vector from rover to drone, in the world frame.
         de = drone_e - rover_e

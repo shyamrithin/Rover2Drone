@@ -1,0 +1,20 @@
+{
+ "log": "logs/route_turbine_07_gt_20260926_011516.csv",
+ "turbine": "turbine_07",
+ "mode": "ground_truth",
+ "arrived": true,
+ "sim_time_s": 773.6,
+ "distance_m": 399.2,
+ "s_start_m": 571.5,
+ "s_end_m": 970.5,
+ "mean_speed_mps": 0.516,
+ "cte_mean_m": 0.039,
+ "cte_rms_m": 0.074,
+ "cte_p95_m": 0.147,
+ "cte_max_m": 0.44,
+ "goal_error_m": 0.99,
+ "pitch_p95_deg": 7.8,
+ "pitch_max_deg": 16.1,
+ "roll_p95_deg": 2.3,
+ "roll_max_deg": 12.6
+}

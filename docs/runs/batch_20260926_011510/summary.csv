@@ -1,0 +1,8 @@
+config,seed,arrived,sim_time_s,distance_m,cte_mean_m,cte_p95_m,cte_max_m,loc_err_mean_m,loc_err_p95_m,loc_err_max_m,goal_error_m,cte_seen_p95_m,log
+gt,0,True,773.6,399.2,0.039,0.147,0.44,,,,0.99,,logs/route_turbine_07_gt_20260926_011516.csv
+m8n,1,True,801.7,410.8,2.445,5.99,6.827,2.748,6.102,7.457,2.75,0.386,logs/route_turbine_07_m8n_s1_20260926_020807.csv
+m8n,2,True,771.4,398.2,0.63,1.229,1.866,1.224,2.31,2.743,1.89,0.159,logs/route_turbine_07_m8n_s2_20260926_022146.csv
+m8n,3,True,772.5,394.9,1.163,2.737,2.902,1.664,3.222,4.189,2.64,0.27,logs/route_turbine_07_m8n_s3_20260926_023453.csv
+rtk,1,True,773.5,399.2,0.173,0.288,0.461,0.124,0.156,0.319,0.98,0.173,logs/route_turbine_07_rtk_s1_20260926_012833.csv
+rtk,2,True,774.2,399.3,0.053,0.172,0.541,0.036,0.081,0.194,0.99,0.159,logs/route_turbine_07_rtk_s2_20260926_014145.csv
+rtk,3,True,774.1,399.2,0.11,0.235,0.363,0.075,0.115,0.27,1.01,0.156,logs/route_turbine_07_rtk_s3_20260926_015456.csv
